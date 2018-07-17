@@ -1,0 +1,71 @@
+*---------------------------------------------------------------------*
+* Report ZZMONITOR
+*---------------------------------------------------------------------*
+* Monitor de activiade en servidor
+*---------------------------------------------------------------------*
+* This report must be run as a job
+* The recommended setting is to run it every 15 minutes with an idle time
+*  of 450 seconds (7.5 minutes)
+*---------------------------------------------------------------------*
+
+report zzmonitor.
+
+include tskhincl.
+
+data: begin of usr_tabl occurs 10.
+    include structure usrinfo.
+data: end of usr_tabl.
+
+data : gt_monitor type standard table of zzmon_usr.
+data : gs_monitor type zzmon_usr.
+
+parameters: p_long as checkbox default 'X'.
+parameters: p_secs(3) type n default 450.
+start-of-selection.
+
+  refresh usr_tabl.
+  perform read_data.
+  perform process_data.
+
+
+form read_data.
+  if p_long = 'X'.
+    call 'ThUsrInfo' id 'OPCODE' field opcode_long_list
+    id 'TABUSR' field usr_tabl-*sys*.
+  else.
+    call 'ThUsrInfo' id 'OPCODE' field opcode_list
+      id 'TABUSR' field usr_tabl-*sys* .
+  endif.
+
+endform.
+
+form process_data.
+  data : lv_minzeit type t.
+  data : lv_maxzeit type t.
+
+  get time.
+
+  lv_minzeit = sy-uzeit - p_secs.
+  lv_maxzeit = sy-uzeit + 60.
+
+  sort usr_tabl by mandt bname.
+  delete usr_tabl where bname = 'SAPSYS'.
+  delete usr_tabl where tcode = space.
+  delete usr_tabl where type = 32.
+  delete usr_tabl where zeit < lv_minzeit.
+  delete usr_tabl where zeit > lv_maxzeit.
+
+  loop at usr_tabl
+  where bname <> space
+    and type <> ''.
+    move-corresponding usr_tabl to gs_monitor.
+    gs_monitor-mandtx = sy-mandt.
+    gs_monitor-erdat = sy-datum.
+    gs_monitor-erzet = sy-uzeit.
+    append gs_monitor to gt_monitor.
+  endloop.
+
+  loop at gt_monitor into gs_monitor.
+    modify zzmon_usr from gs_monitor.
+  endloop.
+endform.
